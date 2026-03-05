@@ -1,14 +1,13 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-REM Always treat this .bat's folder as project root
 cd /d "%~dp0"
 
 set "JAR=%CD%\target\bcastnode-1.0-SNAPSHOT.jar"
 set "CONFIG_ARG=%~1"
 set "MODE=%~2"
-set "START=%~2"
-set "END=%~3"
+set "START_ID=%~2"
+set "END_ID=%~3"
 
 if "%CONFIG_ARG%"=="" goto :usage
 if "%MODE%"=="" goto :usage
@@ -24,38 +23,46 @@ if not exist "%CONFIG%" (
   exit /b 2
 )
 
-REM Count nodes: skip first line, ignore blank and comments
-set /a M=0
-set /a LINE=0
-for /f "usebackq delims=" %%L in ("%CONFIG%") do (
-  set /a LINE+=1
-  if !LINE! GTR 1 (
-    set "RAW=%%L"
-    for /f "delims=#" %%A in ("!RAW!") do set "RAW=%%A"
-    for /f "tokens=1" %%T in ("!RAW!") do set /a M+=1
-  )
-)
+if not exist runlogs mkdir runlogs
 
 if /I "%MODE%"=="all" (
-  set /a START=0
-  set /a END=M-1
+  set "START_ID=-2147483648"
+  set "END_ID=2147483647"
 ) else (
-  if "%END%"=="" goto :usage
+  if "%END_ID%"=="" goto :usage
 )
 
 echo Config="%CONFIG%"
 echo Jar="%JAR%"
-echo Nodes in config (M)=%M%
-echo Launching indices %START%..%END%
+echo Launching ids in range %START_ID%..%END_ID%
+echo.
 
-for /L %%i in (%START%,1,%END%) do (
-  if %%i GEQ 0 if %%i LSS %M% (
-    echo Starting node %%i
-    REM Important: no cmd /c, start java directly
-    start "" /B java -DNODE_INDEX=%%i -jar "%JAR%" "%CONFIG%" %%i
-  ) else (
-    echo Skipping %%i (out of range)
+set /a FOUND=0
+
+REM Read config lines, skip first, strip comments, take 3rd token as ID
+for /f "usebackq skip=1 delims=" %%L in ("%CONFIG%") do (
+  set "RAW=%%L"
+  for /f "delims=#" %%A in ("!RAW!") do set "RAW=%%A"
+  for /f "tokens=1,2,3" %%I in ("!RAW!") do (
+    if not "%%K"=="" (
+      set /a FOUND+=1
+      set /a ID=%%K
+      echo Found id=%%K
+
+      if !ID! GEQ %START_ID% if !ID! LEQ %END_ID% (
+        echo Starting node id !ID!
+        start "" /B java -DLOG_NODE_INDEX=!ID! -jar "%JAR%" "%CONFIG%" !ID!
+      ) else (
+        echo Skipping !ID! (not in range)
+      )
+      echo.
+    )
   )
+)
+
+if %FOUND% EQU 0 (
+  echo ERROR: No node ids found (expected lines: ip port id)
+  exit /b 2
 )
 
 exit /b 0
@@ -63,5 +70,5 @@ exit /b 0
 :usage
 echo Usage:
 echo   %~nx0 ^<config.txt^> all
-echo   %~nx0 ^<config.txt^> ^<startIdx^> ^<endIdx^>
+echo   %~nx0 ^<config.txt^> ^<startId^> ^<endId^>
 exit /b 2

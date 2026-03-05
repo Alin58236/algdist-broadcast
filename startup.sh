@@ -61,7 +61,7 @@ for id in "${IDS[@]}"; do
   fi
 
   echo "Starting node id $id"
-  java -DNODE_INDEX="$id" -jar "$JAR" "$CONFIG" "$id" &
+  java -DLOG_NODE_INDEX="$id" -jar "$JAR" "$CONFIG" "$id" &
 done
 
 wait
