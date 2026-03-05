@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Ensure working directory is the project root (directory of this script)
 ROOT_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 cd "$ROOT_DIR"
 
@@ -10,7 +9,7 @@ JAR="${JAR:-target/bcastnode-1.0-SNAPSHOT.jar}"
 if [[ $# -lt 2 ]]; then
   echo "Usage:"
   echo "  ./startup.sh <config.txt> all"
-  echo "  ./startup.sh <config.txt> <startIdx> <endIdx>"
+  echo "  ./startup.sh <config.txt> <startId> <endId>"
   exit 2
 fi
 
@@ -20,36 +19,49 @@ MODE="$2"
 [[ -f "$JAR" ]] || { echo "ERROR: Jar not found: $JAR"; exit 2; }
 [[ -f "$CONFIG" ]] || { echo "ERROR: Config not found: $CONFIG"; exit 2; }
 
-M=$(
-  tail -n +2 "$CONFIG" |
-    tr -d '\r' |
-    sed 's/#.*$//' |
-    sed '/^[[:space:]]*$/d' |
-    wc -l | tr -d ' '
+mkdir -p runlogs
+
+# Extract node IDs from config:
+# - skip first line
+# - strip CR
+# - strip comments (# ...)
+# - ignore blank lines
+# - take 3rd field as id (require it)
+mapfile -t IDS < <(
+  tail -n +2 "$CONFIG" \
+    | tr -d '\r' \
+    | sed 's/#.*$//' \
+    | awk 'NF>=3 {print $3}' \
+    | sort -n
 )
 
+if [[ ${#IDS[@]} -eq 0 ]]; then
+  echo "ERROR: No node ids found (expected: ip port id lines)"
+  exit 2
+fi
+
 if [[ "$MODE" == "all" ]]; then
-  START=0
-  END=$((M - 1))
+  START_ID="${IDS[0]}"
+  END_ID="${IDS[-1]}"
 else
-  [[ $# -ge 3 ]] || { echo "Usage: ./startup.sh <config.txt> <startIdx> <endIdx>"; exit 2; }
-  START="$MODE"
-  END="$3"
+  [[ $# -ge 3 ]] || { echo "Usage: ./startup.sh <config.txt> <startId> <endId>"; exit 2; }
+  START_ID="$MODE"
+  END_ID="$3"
 fi
 
 echo "Config=$CONFIG"
 echo "Jar=$JAR"
-echo "Nodes in config (M)=$M"
-echo "Launching indices $START..$END"
+echo "Node ids in config: ${IDS[*]}"
+echo "Launching ids in range $START_ID..$END_ID"
 
-for ((i=START; i<=END; i++)); do
-  if (( i < 0 || i >= M )); then
-    echo "Skipping $i (out of range)"
+for id in "${IDS[@]}"; do
+  if (( id < START_ID || id > END_ID )); then
+    echo "Skipping $id (not in range)"
     continue
   fi
 
-  echo "Starting node $i"
-  java -DNODE_INDEX="$i" -jar "$JAR" "$CONFIG" "$i" &
+  echo "Starting node id $id"
+  java -DNODE_INDEX="$id" -jar "$JAR" "$CONFIG" "$id" &
 done
 
 wait
