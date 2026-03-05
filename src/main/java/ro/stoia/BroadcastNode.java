@@ -99,7 +99,7 @@ public class BroadcastNode {
 
                 } catch (SocketTimeoutException ste) {
                     consecutiveTimeouts++;
-                    log.warn("Receive timeout ({}ms). received={}/{}", SO_TIMEOUT_MS, receivedCount.get(), expectedReceives);
+                    log.error("Receive timeout ({}ms). received={}/{}", SO_TIMEOUT_MS, receivedCount.get(), expectedReceives);
 
 //                     test terminate after 5 consecutive timeouts
                      if (consecutiveTimeouts >= 5) {
