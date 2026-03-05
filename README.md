@@ -4,7 +4,7 @@ A Java program that runs multiple “nodes” (separate JVM processes).
 Each node sends UDP datagrams to every node listed in a config file, and validates received datagrams by comparing a SHA-1 included in the packet with a SHA-1 recomputed from the payload.
 
 
-## Architecture & Code Design Choices
+## Code Choices
 
 ### 1. The `Thread.sleep(1)` Bottleneck (UDP Pacing)
 UDP is a "fire-and-forget" protocol with no built-in flow control. If you execute a `for` loop calling `socket.send(...)` 1,000 times without any delay, the CPU blasts those packets into the OS network stack almost instantly. 
